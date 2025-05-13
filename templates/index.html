@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="tabs">
+        <button class="tab-button active" data-tab="monthly">Monthly Leaderboard</button>
+        <button class="tab-button" data-tab="winnings">Winnings Leaderboard</button>
+    </div>
+
+    <div id="monthly-container" class="tab-content active">
+        <div class="month-filter">
+            <select id="month-select">
+                <option value="">Loading months...</option>
+            </select>
+        </div>
+        <div id="months-container"></div>
+    </div>
+
+    <div id="winnings-container" class="tab-content">
+        <div class="loading" id="winnings-loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading winnings data...</div>
+        </div>
+        <div id="winnings-table" class="hidden"></div>
+    </div>
+
+    <style>
+        .month-filter {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .month-filter select {
+            padding: 8px 16px;
+            font-size: 1.1em;
+            border: 2px solid #37003c;
+            border-radius: 4px;
+            background-color: white;
+            color: #37003c;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .month-filter select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(55, 0, 60, 0.2);
+        }
+    </style>
+
+    <script>
+        let allMonths = [];
+        let loadedMonths = new Set();
+        let currentMonth = null;
+
+        // Tab switching functionality
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                // Update active tab button
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                // Show selected content
+                const tabId = button.dataset.tab;
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(`${tabId}-container`).classList.add('active');
+
+                // Show/hide month selector based on selected tab
+                const monthFilter = document.querySelector('.month-filter');
+                monthFilter.style.display = tabId === 'monthly' ? 'block' : 'none';
+            });
+        });
+
+        async function fetchCurrentMonth() {
+            try {
+                const response = await fetch('/api/data?current=true');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching current month:', error);
+                return null;
+            }
+        }
+
+        async function fetchAllMonths() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching all months:', error);
+                return null;
+            }
+        }
+
+        function renderWinningsTable(winnings) {
+            const container = document.getElementById('winnings-table');
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Team</th>
+                            <th class="months-won">Months Won</th>
+                            <th class="total-winnings">Total Winnings</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${winnings.map(team => `
+                            <tr>
+                                <td>
+                                    <div class="team-name">${team.name}</div>
+                                    <div class="player-name">${team.player_name}</div>
+                                </td>
+                                <td class="months-won">${Number.isInteger(team.months_won) ? team.months_won : team.months_won.toFixed(1)}</td>
+                                <td class="total-winnings">£${Math.round(team.total_winnings)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            container.classList.remove('hidden');
+            document.getElementById('winnings-loading').classList.add('hidden');
+        }
+
+        function renderContent(data, selectedMonth) {
+            const container = document.getElementById('months-container');
+            container.innerHTML = ''; // Clear existing content
+
+            const monthData = data.months[selectedMonth];
+            if (!monthData) return;
+
+            const monthSection = document.createElement('div');
+            monthSection.className = 'month-section';
+            
+            // Get leader's points
+            const leaderPoints = monthData.teams[0].total;
+            
+            // Create month header
+            monthSection.innerHTML = `
+                <h2>${selectedMonth}</h2>
+                <p>Gameweeks: ${monthData.gameweeks.join('-')}</p>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Pos</th>
+                            <th>Team</th>
+                            ${monthData.gameweeks.map(gw => `<th class="gameweek-header">GW${gw}</th>`).join('')}
+                            <th class="total-column">Total</th>
+                            <th class="points-off-lead">Points off lead</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${monthData.teams.map((team, index) => `
+                            <tr>
+                                <td class="gameweek-data">${index + 1}</td>
+                                <td>
+                                    <div class="team-name">${team.name}</div>
+                                    <div class="player-name">${team.player_name}</div>
+                                </td>
+                                ${monthData.gameweeks.map(gw => `<td class="gameweek-data">${team.gameweek_scores[gw]}</td>`).join('')}
+                                <td class="total-column">${team.total}</td>
+                                <td class="points-off-lead">${index === 0 ? '-' : `-${leaderPoints - team.total}`}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.appendChild(monthSection);
+        }
+
+        async function initializeApp() {
+            // First, fetch and display current month
+            const currentData = await fetchCurrentMonth();
+            if (currentData) {
+                currentMonth = Object.keys(currentData.months)[0];
+                if (currentMonth) {
+                    loadedMonths.add(currentMonth);
+                    renderContent(currentData, currentMonth);
+                }
+            }
+
+            // Then fetch all months to get the list and winnings
+            const allData = await fetchAllMonths();
+            if (allData) {
+                allMonths = Object.keys(allData.months).sort((a, b) => {
+                    const monthOrder = ['August', 'September', 'October', 'November', 'December', 
+                                      'January', 'February', 'March', 'April', 'May'];
+                    return monthOrder.indexOf(a) - monthOrder.indexOf(b);
+                });
+
+                // Update the month selector with all available months
+                const monthSelect = document.getElementById('month-select');
+                if (monthSelect) {
+                    monthSelect.innerHTML = allMonths.map(month => `
+                        <option value="${month}" ${month === currentMonth ? 'selected' : ''}>
+                            ${month}
+                        </option>
+                    `).join('');
+
+                    // Add event listener for month selection
+                    monthSelect.addEventListener('change', (e) => {
+                        const selectedMonth = e.target.value;
+                        if (selectedMonth) {
+                            renderContent(allData, selectedMonth);
+                        }
+                    });
+                }
+
+                // Display winnings table
+                if (allData.winnings) {
+                    renderWinningsTable(allData.winnings);
+                }
+            }
+        }
+
+        // Start the app when the page loads
+        initializeApp();
+    </script>
+{% endblock %} 

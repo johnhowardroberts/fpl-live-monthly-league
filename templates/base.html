@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPL Monthly League</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #37003c;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .month-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .month-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .month-header h2 {
+            margin: 0;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .gameweek-header {
+            text-align: center;
+            min-width: 60px;
+        }
+        .total-column {
+            text-align: center;
+            font-weight: bold;
+            background-color: #f8f9fa;
+            border-left: 2px solid #37003c;
+            border-right: 2px solid #37003c;
+            min-width: 80px;
+            color: #37003c;
+        }
+        .points-off-lead {
+            text-align: center;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #37003c;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .loading-text {
+            color: #37003c;
+            font-size: 1.2em;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        .month-filter {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .month-filter select {
+            padding: 8px 16px;
+            font-size: 1.1em;
+            border: 2px solid #37003c;
+            border-radius: 4px;
+            background-color: white;
+            color: #37003c;
+            cursor: pointer;
+            min-width: 200px;
+        }
+        .month-filter select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(55, 0, 60, 0.2);
+        }
+        /* Add new style for gameweek data cells */
+        .gameweek-data {
+            text-align: center;
+        }
+        .team-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .player-name {
+            font-size: 0.9em;
+            color: #666;
+        }
+        /* Winnings table styles */
+        .winnings-section {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .winnings-section h2 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        .months-won, .total-winnings {
+            text-align: center;
+        }
+
+        /* Tab styles */
+        .tabs {
+            display: flex;
+            width: 100%;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            font-size: 1.1em;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button:hover {
+            color: #37003c;
+        }
+
+        .tab-button.active {
+            color: #37003c;
+            border-bottom-color: #37003c;
+            background-color: rgba(55, 0, 60, 0.05);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="league-name">Loading...</h1>
+            <p id="team-count"></p>
+            <p class="timestamp" id="timestamp"></p>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Fetching league data...</div>
+        </div>
+        
+        <div id="content" class="hidden">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <script>
+        // Function to fetch and display data
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                
+                // Update header
+                document.getElementById('league-name').textContent = data.league_name;
+                document.getElementById('team-count').textContent = `Teams: ${data.team_count}`;
+                document.getElementById('timestamp').textContent = `Last updated: ${data.timestamp}`;
+                
+                // Hide loading, show content
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+                
+                // Store the data globally
+                window.leagueData = data;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.querySelector('.loading-text').textContent = 'Error loading data. Please try again.';
+            }
+        }
+
+        // Start fetching data when page loads
+        fetchData();
+    </script>
+</body>
+</html> 
