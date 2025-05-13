@@ -3,9 +3,12 @@ import requests
 from dotenv import load_dotenv
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 from flask import Flask, render_template, jsonify, request
+import hashlib
+import pickle
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -20,34 +23,92 @@ app = Flask(__name__,
 
 class FPLAPI:
     BASE_URL = "https://fantasy.premierleague.com/api"
+    CACHE_DIR = Path("cache")
+    CACHE_DURATION = timedelta(minutes=5)
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'application/json',
             'Accept-Language': 'en-US,en;q=0.9',
             'Origin': 'https://fantasy.premierleague.com',
-            'Referer': 'https://fantasy.premierleague.com/'
+            'Referer': 'https://fantasy.premierleague.com/',
+            'sec-ch-ua': '"Google Chrome";v="91", "Chromium";v="91"',
+            'sec-ch-ua-mobile': '?0',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
         })
+        
+        # Create cache directory if it doesn't exist
+        self.CACHE_DIR.mkdir(exist_ok=True)
+    
+    def _get_cache_path(self, url):
+        """Generate a cache file path for a URL."""
+        cache_key = hashlib.md5(url.encode()).hexdigest()
+        return self.CACHE_DIR / f"{cache_key}.cache"
+    
+    def _is_cache_valid(self, cache_path):
+        """Check if the cache is still valid."""
+        if not cache_path.exists():
+            return False
+        cache_age = datetime.now() - datetime.fromtimestamp(cache_path.stat().st_mtime)
+        return cache_age < self.CACHE_DURATION
+    
+    def _get_from_cache(self, url):
+        """Get data from cache if available and valid."""
+        cache_path = self._get_cache_path(url)
+        if self._is_cache_valid(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    return pickle.load(f)
+            except:
+                return None
+        return None
+    
+    def _save_to_cache(self, url, data):
+        """Save data to cache."""
+        cache_path = self._get_cache_path(url)
+        try:
+            with open(cache_path, 'wb') as f:
+                pickle.dump(data, f)
+        except:
+            pass
+    
+    def _make_request(self, url):
+        """Make a request with caching."""
+        # Try to get from cache first
+        cached_data = self._get_from_cache(url)
+        if cached_data is not None:
+            return cached_data
+        
+        # If not in cache or cache invalid, make the request
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            data = response.json()
+            self._save_to_cache(url, data)
+            return data
+        except requests.exceptions.RequestException as e:
+            print(f"Error making request to {url}: {e}")
+            # If request fails, try to return cached data even if expired
+            cached_data = self._get_from_cache(url)
+            if cached_data is not None:
+                return cached_data
+            raise
     
     def get_bootstrap_static(self):
         url = f"{self.BASE_URL}/bootstrap-static/"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
+        return self._make_request(url)
     
     def get_league_standings(self, league_id: int):
         url = f"{self.BASE_URL}/leagues-classic/{league_id}/standings/"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
+        return self._make_request(url)
 
     def get_gameweek_picks(self, team_id: int, gameweek: int):
         url = f"{self.BASE_URL}/entry/{team_id}/event/{gameweek}/picks/"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
+        return self._make_request(url)
 
 def get_gameweeks_by_month(bootstrap_data):
     """Create a mapping of months to gameweeks based on deadline times.
