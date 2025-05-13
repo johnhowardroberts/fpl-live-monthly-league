@@ -44,6 +44,20 @@ class FPLAPI:
     CACHE_DIR = Path("cache")
     CACHE_DURATION = timedelta(minutes=5)
     
+    # Static mapping of gameweeks to months for the 2024/25 season
+    GAMEWEEK_TO_MONTH = {
+        1: "August", 2: "August", 3: "August",
+        4: "September", 5: "September", 6: "September",
+        7: "October", 8: "October", 9: "October",
+        10: "November", 11: "November", 12: "November", 13: "November",
+        14: "December", 15: "December", 16: "December", 17: "December", 18: "December", 19: "December",
+        20: "January", 21: "January", 22: "January", 23: "January",
+        24: "February", 25: "February", 26: "February", 27: "February",
+        28: "March", 29: "March",
+        30: "April", 31: "April", 32: "April", 33: "April", 34: "April",
+        35: "May", 36: "May", 37: "May", 38: "May"
+    }
+    
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
@@ -155,11 +169,6 @@ class FPLAPI:
                 return cached_data
             raise
     
-    def get_bootstrap_static(self):
-        """Get bootstrap data using the newer endpoint."""
-        url = f"{self.BASE_URL}/bootstrap-dynamic/"
-        return self._make_request(url)
-    
     def get_league_standings(self, league_id: int):
         """Get league standings using the newer endpoint."""
         url = f"{self.BASE_URL}/leagues-classic/{league_id}/standings/"
@@ -170,18 +179,17 @@ class FPLAPI:
         url = f"{self.BASE_URL}/entry/{team_id}/event/{gameweek}/picks/"
         return self._make_request(url)
 
-def get_gameweeks_by_month(bootstrap_data):
-    """Create a mapping of months to gameweeks based on deadline times.
-    Includes both finished gameweeks and gameweeks that are currently live."""
+def get_gameweeks_by_month():
+    """Create a mapping of months to gameweeks using the static mapping."""
     gameweeks_by_month = defaultdict(list)
     current_time = datetime.utcnow()
+    current_month = current_time.strftime("%B")
     
-    for event in bootstrap_data['events']:
-        deadline = datetime.strptime(event['deadline_time'], "%Y-%m-%dT%H:%M:%SZ")
-        # Include gameweek if it's either finished or the deadline has passed
-        if event['finished'] or deadline <= current_time:
-            month = deadline.strftime("%B")  # Get month name
-            gameweeks_by_month[month].append(event['id'])
+    # Add all gameweeks to their respective months
+    for gw, month in FPLAPI.GAMEWEEK_TO_MONTH.items():
+        # Only include gameweeks up to the current month
+        if month <= current_month:
+            gameweeks_by_month[month].append(gw)
     
     return gameweeks_by_month
 
@@ -232,9 +240,8 @@ def get_monthly_data(current_month_only=False):
     fpl = FPLAPI()
     league_id = int(os.getenv('FPL_LEAGUE_ID', '754824'))
 
-    # Get bootstrap data and create month-to-gameweek mapping
-    bootstrap_data = fpl.get_bootstrap_static()
-    gameweeks_by_month = get_gameweeks_by_month(bootstrap_data)
+    # Get gameweek-to-month mapping
+    gameweeks_by_month = get_gameweeks_by_month()
     
     # Get league data
     league_data = fpl.get_league_standings(league_id)
