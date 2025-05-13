@@ -10,21 +10,30 @@ import hashlib
 import pickle
 from pathlib import Path
 import sys
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
 # Get the absolute path to the templates directory
 template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
-print(f"Template directory: {template_dir}")  # Debug print
+logger.info(f"Template directory: {template_dir}")
 
 # Log environment information
-print("\nEnvironment Information:")
-print(f"Python version: {sys.version}")
-print(f"Platform: {sys.platform}")
-print(f"Running on Render: {'RENDER' in os.environ}")
-print(f"Current working directory: {os.getcwd()}")
-print(f"Environment variables: {dict(os.environ)}")
+logger.info("\nEnvironment Information:")
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Platform: {sys.platform}")
+logger.info(f"Running on Render: {'RENDER' in os.environ}")
+logger.info(f"Current working directory: {os.getcwd()}")
+logger.info(f"Environment variables: {dict(os.environ)}")
 
 app = Flask(__name__, 
            template_folder=template_dir,
@@ -63,12 +72,12 @@ class FPLAPI:
         
         # Initialize with a visit to the main page to get cookies
         try:
-            print("\nInitializing FPL API session...")
+            logger.info("\nInitializing FPL API session...")
             response = self.session.get('https://fantasy.premierleague.com/')
-            print(f"Initial page visit status: {response.status_code}")
-            print(f"Cookies received: {dict(self.session.cookies)}")
+            logger.info(f"Initial page visit status: {response.status_code}")
+            logger.info(f"Cookies received: {dict(self.session.cookies)}")
         except Exception as e:
-            print(f"Error during initialization: {e}")
+            logger.error(f"Error during initialization: {e}")
     
     def _wait_before_request(self):
         """Ensure we don't make requests too quickly."""
@@ -115,34 +124,34 @@ class FPLAPI:
         # Try to get from cache first
         cached_data = self._get_from_cache(url)
         if cached_data is not None:
-            print(f"\nUsing cached data for {url}")
+            logger.info(f"\nUsing cached data for {url}")
             return cached_data
         
         # If not in cache or cache invalid, make the request
         try:
             self._wait_before_request()
-            print(f"\nMaking request to {url}")
-            print(f"Request headers: {dict(self.session.headers)}")
-            print(f"Current cookies: {dict(self.session.cookies)}")
+            logger.info(f"\nMaking request to {url}")
+            logger.info(f"Request headers: {dict(self.session.headers)}")
+            logger.info(f"Current cookies: {dict(self.session.cookies)}")
             
             response = self.session.get(url, timeout=10)
-            print(f"Response status: {response.status_code}")
-            print(f"Response headers: {dict(response.headers)}")
+            logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
             
             if response.status_code == 403:
-                print("403 Forbidden received. Full response:")
-                print(response.text)
+                logger.error("403 Forbidden received. Full response:")
+                logger.error(response.text)
             
             response.raise_for_status()
             data = response.json()
             self._save_to_cache(url, data)
             return data
         except requests.exceptions.RequestException as e:
-            print(f"Error making request to {url}: {e}")
+            logger.error(f"Error making request to {url}: {e}")
             # If request fails, try to return cached data even if expired
             cached_data = self._get_from_cache(url)
             if cached_data is not None:
-                print("Using expired cache data due to request failure")
+                logger.info("Using expired cache data due to request failure")
                 return cached_data
             raise
     
@@ -203,7 +212,7 @@ def get_month_data(month, league_data, fpl, gameweeks_by_month):
                 gameweek_scores[gw] = points
                 time.sleep(0.2)  # Be polite to the API
             except Exception as e:
-                print(f"Error fetching data for team {entry_name} in gameweek {gw}: {e}")
+                logger.error(f"Error fetching data for team {entry_name} in gameweek {gw}: {e}")
                 gameweek_scores[gw] = 0
         
         results.append({
