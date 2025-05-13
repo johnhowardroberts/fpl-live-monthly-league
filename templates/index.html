@@ -74,22 +74,51 @@
         async function fetchCurrentMonth() {
             try {
                 const response = await fetch('/api/data?current=true');
-                const data = await response.json();
-                return data;
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to fetch current month data');
+                }
+                return await response.json();
             } catch (error) {
                 console.error('Error fetching current month:', error);
-                return null;
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('error-message').textContent = 'Error loading data. Please try again later.';
+                document.getElementById('error-message').style.display = 'block';
+                throw error;
             }
         }
 
         async function fetchAllMonths() {
             try {
                 const response = await fetch('/api/data');
-                const data = await response.json();
-                return data;
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to fetch all months data');
+                }
+                return await response.json();
             } catch (error) {
                 console.error('Error fetching all months:', error);
-                return null;
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('error-message').textContent = 'Error loading data. Please try again later.';
+                document.getElementById('error-message').style.display = 'block';
+                throw error;
+            }
+        }
+
+        async function fetchWinnings() {
+            try {
+                const response = await fetch('/api/winnings');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to fetch winnings data');
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching winnings:', error);
+                document.getElementById('winnings-loading-spinner').style.display = 'none';
+                document.getElementById('winnings-error-message').textContent = 'Error loading winnings data. Please try again later.';
+                document.getElementById('winnings-error-message').style.display = 'block';
+                throw error;
             }
         }
 

@@ -301,25 +301,40 @@ def get_monthly_data(current_month_only=False):
 
 @app.route('/')
 def index():
+    logger.info("Serving index page")
     return render_template('index.html')
 
 @app.route('/api/data')
 def get_data():
-    current_month_only = request.args.get('current', 'false').lower() == 'true'
-    return jsonify(get_monthly_data(current_month_only))
+    try:
+        logger.info("Received request for /api/data")
+        current_month_only = request.args.get('current', 'false').lower() == 'true'
+        logger.info(f"Fetching data (current_month_only={current_month_only})")
+        data = get_monthly_data(current_month_only)
+        logger.info("Successfully fetched data")
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Error in /api/data: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/winnings')
 def get_winnings():
-    data = get_monthly_data()
-    return jsonify(data['winnings'])
+    try:
+        logger.info("Received request for /api/winnings")
+        data = get_monthly_data()
+        logger.info("Successfully fetched winnings data")
+        return jsonify(data['winnings'])
+    except Exception as e:
+        logger.error(f"Error in /api/winnings: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.getenv('PORT', 8080))
-    print("\n" + "="*80)
-    print("FPL Monthly League Web Server")
-    print("="*80)
-    print("\nThe server is starting up...")
-    print(f"Once ready, you can view the league table at: http://localhost:{port}")
-    print("\nPress Ctrl+C to stop the server when you're done.")
-    print("="*80 + "\n")
+    logger.info("\n" + "="*80)
+    logger.info("FPL Monthly League Web Server")
+    logger.info("="*80)
+    logger.info("\nThe server is starting up...")
+    logger.info(f"Once ready, you can view the league table at: http://localhost:{port}")
+    logger.info("\nPress Ctrl+C to stop the server when you're done.")
+    logger.info("="*80 + "\n")
     app.run(debug=True, port=port) 
