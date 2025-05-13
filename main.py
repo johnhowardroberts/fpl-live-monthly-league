@@ -7,6 +7,9 @@ from datetime import datetime
 from collections import defaultdict
 from flask import Flask, render_template, jsonify, request
 
+# Load environment variables
+load_dotenv()
+
 # Get the absolute path to the templates directory
 template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
 print(f"Template directory: {template_dir}")  # Debug print
@@ -99,7 +102,7 @@ def get_month_data(month, league_data, fpl, gameweeks_by_month):
 
 def get_monthly_data(current_month_only=False):
     fpl = FPLAPI()
-    league_id = 754824
+    league_id = int(os.getenv('FPL_LEAGUE_ID', '754824'))
 
     # Get bootstrap data and create month-to-gameweek mapping
     bootstrap_data = fpl.get_bootstrap_static()
@@ -183,11 +186,12 @@ def get_winnings():
     return jsonify(data['winnings'])
 
 if __name__ == "__main__":
+    port = int(os.getenv('PORT', 8080))
     print("\n" + "="*80)
     print("FPL Monthly League Web Server")
     print("="*80)
     print("\nThe server is starting up...")
-    print("Once ready, you can view the league table at: http://localhost:8080")
+    print(f"Once ready, you can view the league table at: http://localhost:{port}")
     print("\nPress Ctrl+C to stop the server when you're done.")
     print("="*80 + "\n")
-    app.run(debug=True, port=8080) 
+    app.run(debug=True, port=port) 
