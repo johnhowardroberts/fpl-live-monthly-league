@@ -9,6 +9,7 @@ from flask import Flask, render_template, jsonify, request
 import hashlib
 import pickle
 from pathlib import Path
+import sys
 
 # Load environment variables
 load_dotenv()
@@ -16,6 +17,14 @@ load_dotenv()
 # Get the absolute path to the templates directory
 template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
 print(f"Template directory: {template_dir}")  # Debug print
+
+# Log environment information
+print("\nEnvironment Information:")
+print(f"Python version: {sys.version}")
+print(f"Platform: {sys.platform}")
+print(f"Running on Render: {'RENDER' in os.environ}")
+print(f"Current working directory: {os.getcwd()}")
+print(f"Environment variables: {dict(os.environ)}")
 
 app = Flask(__name__, 
            template_folder=template_dir,
@@ -42,9 +51,7 @@ class FPLAPI:
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-origin',
-            'DNT': '1',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+            'DNT': '1'
         })
         
         # Create cache directory if it doesn't exist
@@ -53,6 +60,15 @@ class FPLAPI:
         # Add a small delay between requests
         self.last_request_time = 0
         self.min_request_interval = 1.0  # seconds
+        
+        # Initialize with a visit to the main page to get cookies
+        try:
+            print("\nInitializing FPL API session...")
+            response = self.session.get('https://fantasy.premierleague.com/')
+            print(f"Initial page visit status: {response.status_code}")
+            print(f"Cookies received: {dict(self.session.cookies)}")
+        except Exception as e:
+            print(f"Error during initialization: {e}")
     
     def _wait_before_request(self):
         """Ensure we don't make requests too quickly."""
@@ -99,12 +115,24 @@ class FPLAPI:
         # Try to get from cache first
         cached_data = self._get_from_cache(url)
         if cached_data is not None:
+            print(f"\nUsing cached data for {url}")
             return cached_data
         
         # If not in cache or cache invalid, make the request
         try:
             self._wait_before_request()
+            print(f"\nMaking request to {url}")
+            print(f"Request headers: {dict(self.session.headers)}")
+            print(f"Current cookies: {dict(self.session.cookies)}")
+            
             response = self.session.get(url, timeout=10)
+            print(f"Response status: {response.status_code}")
+            print(f"Response headers: {dict(response.headers)}")
+            
+            if response.status_code == 403:
+                print("403 Forbidden received. Full response:")
+                print(response.text)
+            
             response.raise_for_status()
             data = response.json()
             self._save_to_cache(url, data)
@@ -114,18 +142,22 @@ class FPLAPI:
             # If request fails, try to return cached data even if expired
             cached_data = self._get_from_cache(url)
             if cached_data is not None:
+                print("Using expired cache data due to request failure")
                 return cached_data
             raise
     
     def get_bootstrap_static(self):
-        url = f"{self.BASE_URL}/bootstrap-static/"
+        """Get bootstrap data using the newer endpoint."""
+        url = f"{self.BASE_URL}/bootstrap-dynamic/"
         return self._make_request(url)
     
     def get_league_standings(self, league_id: int):
+        """Get league standings using the newer endpoint."""
         url = f"{self.BASE_URL}/leagues-classic/{league_id}/standings/"
         return self._make_request(url)
 
     def get_gameweek_picks(self, team_id: int, gameweek: int):
+        """Get gameweek picks using the newer endpoint."""
         url = f"{self.BASE_URL}/entry/{team_id}/event/{gameweek}/picks/"
         return self._make_request(url)
 
