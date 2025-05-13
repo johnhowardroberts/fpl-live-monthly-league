@@ -29,20 +29,38 @@ class FPLAPI:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
             'Origin': 'https://fantasy.premierleague.com',
             'Referer': 'https://fantasy.premierleague.com/',
-            'sec-ch-ua': '"Google Chrome";v="91", "Chromium";v="91"',
+            'sec-ch-ua': '"Chromium";v="136", "Not(A:Brand";v="99"',
             'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin'
+            'Sec-Fetch-Site': 'same-origin',
+            'DNT': '1',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
         })
         
         # Create cache directory if it doesn't exist
         self.CACHE_DIR.mkdir(exist_ok=True)
+        
+        # Add a small delay between requests
+        self.last_request_time = 0
+        self.min_request_interval = 1.0  # seconds
+    
+    def _wait_before_request(self):
+        """Ensure we don't make requests too quickly."""
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+        if time_since_last_request < self.min_request_interval:
+            time.sleep(self.min_request_interval - time_since_last_request)
+        self.last_request_time = time.time()
     
     def _get_cache_path(self, url):
         """Generate a cache file path for a URL."""
@@ -77,7 +95,7 @@ class FPLAPI:
             pass
     
     def _make_request(self, url):
-        """Make a request with caching."""
+        """Make a request with caching and rate limiting."""
         # Try to get from cache first
         cached_data = self._get_from_cache(url)
         if cached_data is not None:
@@ -85,7 +103,8 @@ class FPLAPI:
         
         # If not in cache or cache invalid, make the request
         try:
-            response = self.session.get(url)
+            self._wait_before_request()
+            response = self.session.get(url, timeout=10)
             response.raise_for_status()
             data = response.json()
             self._save_to_cache(url, data)
